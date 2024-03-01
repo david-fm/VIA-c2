@@ -11,7 +11,7 @@ from umucv.stream import autoStream
 from scipy import signal
 
 from typing import List, Tuple, Dict
-
+from polynomials import *
 
 
 def cconv(k, x):
@@ -148,13 +148,99 @@ class CircularROI:
         self.rois = []
         self.masks.clear()
         self.boxes.clear()
+
+        
+
+class PolyROI:
+    def __init__(self, window):
+        """Class to handle the circular ROI selection in a window"""
+
+        """List to store the center and radius of the circular ROI"""
+        self.rois: List[Tuple[pt,List[int]]] = []
+        """List to store the masks of the circular ROI"""
+        self.masks: Dict[Tuple[pt,int],np.ndarray] = {}
+        """List to store the boxes where to apply filters"""
+        self.boxes: Dict[Tuple[pt,int],np.ndarray] = {}
+        self.window = window
+
+        
     
+        def fun(event, x, y, flags, param):
+            if event == cv.EVENT_LBUTTONDOWN:
+                radii = [randint(10, 100) for _ in range(randint(0,20))]
+                self.rois.append((pt(x, y), radii))
+        
+        self.fun = fun
+            
+        cv.setMouseCallback(window, fun)
+    
+    def setAsCallback(self):
+        """Method to set the class as the mouse callback"""
+        cv.setMouseCallback(self.window, self.fun)
+    
+    
+    def create_masks(self, h,w):
+        """Method to fill the masks per each circular ROI"""
+        for roi in self.rois:
+            if hash(roi[0]) in self.masks:
+                continue
+
+            center, radii = roi
+            points = polynomialModel(center, radii, 15)
+            polygon = lPolynomial2nlPolynomial(points)
+            mask = maskFromPolygons([np.array(polygon, np.int32)], (h,w))
+
+            self.masks[hash(roi[0])] = mask
+    
+    def create_boxes(self, frame):
+        """Method to fill the boxes where to apply filters"""
+        for roi in self.rois:
+            
+            center, radii = roi
+            x, y = center
+
+            radius = max(radii)
+
+            self.boxes[hash(roi[0])] = frame[y-radius:y+radius, x-radius:x+radius]
+    
+    def apply_filter(self, frame, active):
+        """Method to apply the filter to the boxes"""
+        for roi in self.rois:
+            has_roi = hash(roi[0])
+            if active == 'b':
+                mask = self.masks[has_roi]
+                self.boxes[has_roi] = bordes(self.boxes[has_roi])
+                x, y = roi[0]
+                radii = roi[1]
+                radius = max(radii)
+                mask_section = mask[y-radius:y+radius, x-radius:x+radius]
+                frame_section = frame[y-radius:y+radius, x-radius:x+radius]
+                frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+            elif active == 'l':
+                mask = self.masks[has_roi]
+                self.boxes[has_roi] = cconv(
+                    ([[0, -1,  0], [-1, 4, -1], [0, -1,  0]]), self.boxes[has_roi])
+                x, y = roi[0]
+                radii = roi[1]
+                radius = max(radii)
+                mask_section = mask[y-radius:y+radius, x-radius:x+radius]
+                frame_section = frame[y-radius:y+radius, x-radius:x+radius]
+                frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+
+
+    
+    def clean(self):
+        """Method to clean the ROI"""
+        self.rois = []
+        self.masks.clear()
+        self.boxes.clear()
 
 cv.namedWindow("input")
 cv.moveWindow('input', 0, 0)
 
 region = ROI("input")
 circular_region = CircularROI("input")
+poly_region = PolyROI("input")
 active = ''
 mode = 'circular'   # 'quad' or 'circular'
 points = []     # list of points to apply masks in circular regions
@@ -168,11 +254,19 @@ for key, frame in autoStream():
 
 
     if key == ord('e'):
-        mode = 'circular' if mode == 'quad' else 'quad'
+        if mode == 'quad':
+            mode = 'circular'
+        elif mode == 'circular':
+            mode = 'poly'
+        else:
+            mode = 'quad'
+        
         if mode == 'quad':
             region.setAsCallback()
-        else:
+        elif mode == 'circular':
             circular_region.setAsCallback()
+        elif mode == 'poly':
+            poly_region.setAsCallback()
     elif key == ord('c'):
         active = ''
     elif key in AVAILABLE_KEYS:
@@ -204,6 +298,14 @@ for key, frame in autoStream():
         circular_region.create_masks(h,w)
         circular_region.create_boxes(frame)
         circular_region.apply_filter(frame, active)
+    
+    elif poly_region.rois and mode == 'poly':
+        if key == ord('x'):
+            poly_region.clean()
+        
+        poly_region.create_masks(h,w)
+        poly_region.create_boxes(frame)
+        poly_region.apply_filter(frame, active)
         
 
     frame = float2gray(frame)
