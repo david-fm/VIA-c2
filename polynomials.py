@@ -2,6 +2,7 @@ import numpy as np
 from math import cos, sin
 import cv2 as cv
 from random import randint
+import timeit
 
 from typing import List, Dict
 from collections import namedtuple
@@ -29,33 +30,54 @@ def polynomialModel(center: pt, radius: List[int], fractions: int = 0) -> List[p
     return points
 
 def lPolynomial2nlPolynomial(points: List[pt]) -> List[pt]:
-    """Convert a linear polynomial to a non linear polynomial using splines"""
+    """Convert a linear polynomial to a non linear polynomial using 
+    2nd degree bezier curves"""
     assert len(points) % 2 == 0, "The number of points must be divisible by 2"
 
-    def spline(a: pt, b: pt, c:pt) -> List[pt]:
-        """Create a spline between two points"""
+    def bezier(a: pt, b: pt, c:pt) -> List[pt]:
+        """Create a bezier curve given three control points"""
         points: Dict[pt, bool] = {}
 
-        p1 = c
+        p1 = a
         p2 = b
-        p3 = a
+        p3 = c
 
-        # https://forum.opencv.org/t/draw-a-spline-with-opencv/7979
         for t in np.linspace(0,1,11):
-            x = t*t*p1.x + 2*t*(1-t)*p2.x + (1-t)*(1-t)*p3.x
-            y = t*t*p1.y + 2*t*(1-t)*p2.y + (1-t)*(1-t)*p3.y
+            x = p1.x * (1-t)**2 + p2.x * 2*t*(1-t) + p3.x * t**2
+            y = p1.y * (1-t)**2 + p2.y * 2*t*(1-t) + p3.y * t**2
 
             point = pt(int(x), int(y))
             points[point] = True
         return list(points.keys())
+    
+    tM = np.array([[(1-t)**2, 2*t*(1-t), t**2] for t in np.linspace(0,1,11)])
+
+    def bezier_improved(a: pt, b: pt, c: pt) -> List[pt]:
+        """Create a bezier curve given three control points"""
+
+        p1 = a
+        p2 = b
+        p3 = c
+
+        pM = np.array([[p1.x, p1.y], [p2.x, p2.y], [p3.x, p3.y]])
+
+        result =  (tM @ pM).astype(int)
+        resultDict = {pt(x,y): True for x,y in result}
+
+        return resultDict.keys()
+    
+    
 
     new_points = []
     for i in range(0,len(points)-2,2):
-        result = spline(points[i], points[i+1], points[i+2])
+        timesImproved = timeit.timeit(lambda: bezier_improved(points[i], points[i+1], points[i+2]), number=1000)
+        times = timeit.timeit(lambda: bezier(points[i], points[i+1], points[i+2]), number=1000)
+        print(f"Improvement: {times/timesImproved}")
+        result = bezier_improved(points[i], points[i+1], points[i+2])
         new_points.extend(result)
 
     i = len(points)-2
-    result = spline(points[i], points[i+1], points[0])
+    result = bezier_improved(points[i], points[i+1], points[0])
     new_points.extend(result)
 
     return new_points
