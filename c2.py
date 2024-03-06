@@ -269,6 +269,18 @@ class PolyROI:
         self.masks.clear()
         self.boxes.clear()
 
+help_frame = np.zeros((200,400,3), dtype=np.uint8)
+putText(help_frame, "Press 'e' to change mode", orig=(10, 16))
+putText(help_frame, "Press 'c' to clear the filter", orig=(10, 32))
+putText(help_frame, "Press 'q' to quit", orig=(10, 48))
+putText(help_frame, "Press 'h' to hide this help", orig=(10, 64))
+putText(help_frame, "Press 'x' to clean the ROI", orig=(10, 80))
+putText(help_frame, "Press 'b' to apply the border filter", orig=(10, 96))
+putText(help_frame, "Press 'l' to apply the laplacian filter", orig=(10, 112))
+putText(help_frame, "Press 'g' to apply the gaussian filter", orig=(10, 128))
+
+help_active = False
+
 cv.namedWindow("input")
 cv.moveWindow('input', 0, 0)
 
@@ -306,6 +318,13 @@ for key, frame in autoStream():
         active = ''
     elif key == ord('q'):
         break
+    elif key == ord('h'):
+        print("help")
+        help_active = not help_active
+        if help_active:
+            cv.imshow('help', help_frame)
+        else:
+            cv.destroyWindow('help')
     elif key in AVAILABLE_KEYS:
             active = chr(key)
 
@@ -327,6 +346,10 @@ for key, frame in autoStream():
             case 'l':
                 frame[y1:y2, x1:x2] = cconv(
                     ([[0, -1,  0], [-1, 4, -1], [0, -1,  0]]), frame[y1:y2, x1:x2])
+            case 'g':
+                if frame[y1:y2, x1:x2].shape[0] > 0 and frame[y1:y2, x1:x2].shape[1] > 0:
+                    frame[y1:y2, x1:x2] = cv.GaussianBlur(
+                        frame[y1:y2, x1:x2], (15, 15), 10)
 
     elif circular_region.rois and mode == 'circular':
         if key == ord('x'):
@@ -352,3 +375,6 @@ for key, frame in autoStream():
     putText(frame, f'Mode: {mode}', orig=(w-120, 40))
     putText(frame, f'Letter: {active}', orig=(w-120, 16))
     cv.imshow('input', frame)
+
+
+        
