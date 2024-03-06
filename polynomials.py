@@ -72,7 +72,7 @@ def lPolynomial2nlPolynomial(points: List[pt]) -> List[pt]:
     for i in range(0,len(points)-2,2):
         timesImproved = timeit.timeit(lambda: bezier_improved(points[i], points[i+1], points[i+2]), number=1000)
         times = timeit.timeit(lambda: bezier(points[i], points[i+1], points[i+2]), number=1000)
-        print(f"Improvement: {times/timesImproved}")
+        #print(f"Improvement: {times/timesImproved}")
         result = bezier_improved(points[i], points[i+1], points[i+2])
         new_points.extend(result)
 

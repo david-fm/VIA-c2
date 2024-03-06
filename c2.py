@@ -74,8 +74,8 @@ class CircularROI:
     def __init__(self, window):
         """Class to handle the circular ROI selection in a window"""
 
-        """List to store the center and radius of the circular ROI"""
-        self.rois: List[Tuple[Tuple[int],int]] = []
+        """Dict to store the center and radius of the circular ROI"""
+        self.rois: Dict[int,Tuple[Tuple[int],int]] = {}
         """List to store the masks of the circular ROI"""
         self.masks: Dict[Tuple[Tuple[int],int],np.ndarray] = {}
         """List to store the boxes where to apply filters"""
@@ -86,12 +86,14 @@ class CircularROI:
     
         def fun(event, x, y, flags, param):
             if event == cv.EVENT_LBUTTONDOWN:
-                radius = randint(10, 100)
-                self.rois.append(((x, y), radius))
+                if not hash((x,y)) in self.rois:
+
+                    radius = randint(10, 100)
+                    self.rois[hash((x,y))] = ((x,y),radius)
         
         self.fun = fun
             
-        cv.setMouseCallback(window, fun)
+        self.setAsCallback()
     
     def setAsCallback(self):
         """Method to set the class as the mouse callback"""
@@ -101,6 +103,7 @@ class CircularROI:
     def create_masks(self, h,w):
         """Method to fill the masks per each circular ROI"""
         for roi in self.rois:
+            roi = self.rois[roi]
             if hash(roi[0]) in self.masks:
                 continue
 
@@ -113,7 +116,7 @@ class CircularROI:
     def create_boxes(self, frame):
         """Method to fill the boxes where to apply filters"""
         for roi in self.rois:
-            
+            roi = self.rois[roi]
             center, radius = roi
             x, y = center
 
@@ -122,6 +125,7 @@ class CircularROI:
     def apply_filter(self, frame, active):
         """Method to apply the filter to the boxes"""
         for roi in self.rois:
+            roi = self.rois[roi]
             has_roi = hash(roi[0])
             if active == 'b':
                 mask = self.masks[has_roi]
@@ -131,10 +135,20 @@ class CircularROI:
                 mask_section = mask[y-radius:y+radius, x-radius:x+radius]
                 frame_section = frame[y-radius:y+radius, x-radius:x+radius]
                 frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+
             elif active == 'l':
                 mask = self.masks[has_roi]
                 self.boxes[has_roi] = cconv(
                     ([[0, -1,  0], [-1, 4, -1], [0, -1,  0]]), self.boxes[has_roi])
+                x, y = roi[0]
+                radius = roi[1]
+                mask_section = mask[y-radius:y+radius, x-radius:x+radius]
+                frame_section = frame[y-radius:y+radius, x-radius:x+radius]
+                frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+            
+            elif active == 'g':
+                mask = self.masks[has_roi]
+                self.boxes[has_roi] = cv.GaussianBlur(self.boxes[has_roi], (15,15), 10)
                 x, y = roi[0]
                 radius = roi[1]
                 mask_section = mask[y-radius:y+radius, x-radius:x+radius]
@@ -145,7 +159,7 @@ class CircularROI:
     
     def clean(self):
         """Method to clean the ROI"""
-        self.rois = []
+        self.rois.clear()
         self.masks.clear()
         self.boxes.clear()
 
@@ -155,20 +169,26 @@ class PolyROI:
     def __init__(self, window):
         """Class to handle the circular ROI selection in a window"""
 
-        """List to store the center and radius of the circular ROI"""
-        self.rois: List[Tuple[pt,List[int]]] = []
+        """Dict to store the center and radius of the circular ROI"""
+        self.rois: Dict[int,Tuple[Tuple[int],int]] = {}
         """List to store the masks of the circular ROI"""
         self.masks: Dict[Tuple[pt,int],np.ndarray] = {}
         """List to store the boxes where to apply filters"""
         self.boxes: Dict[Tuple[pt,int],np.ndarray] = {}
         self.window = window
 
-        
+        def random_radius(upper_limit: int, lower_limit: int) -> int:
+            """Return a random radius"""
+            to_return = randint(upper_limit, lower_limit if lower_limit % 2 == 0 else lower_limit - 1) 
+            return to_return if to_return % 2 == 0 else to_return + 1
+
     
         def fun(event, x, y, flags, param):
             if event == cv.EVENT_LBUTTONDOWN:
-                radii = [randint(10, 100) for _ in range(randint(0,20))]
-                self.rois.append((pt(x, y), radii))
+                hash_point = hash((x,y))
+                if not hash_point in self.rois:
+                    radii = [random_radius(10, 100) for _ in range(randint(2,20))]
+                    self.rois[hash_point] =  (pt(x, y), radii)
         
         self.fun = fun
             
@@ -182,6 +202,7 @@ class PolyROI:
     def create_masks(self, h,w):
         """Method to fill the masks per each circular ROI"""
         for roi in self.rois:
+            roi = self.rois[roi]
             if hash(roi[0]) in self.masks:
                 continue
 
@@ -195,7 +216,8 @@ class PolyROI:
     def create_boxes(self, frame):
         """Method to fill the boxes where to apply filters"""
         for roi in self.rois:
-            
+            roi = self.rois[roi]
+
             center, radii = roi
             x, y = center
 
@@ -206,6 +228,7 @@ class PolyROI:
     def apply_filter(self, frame, active):
         """Method to apply the filter to the boxes"""
         for roi in self.rois:
+            roi = self.rois[roi]
             has_roi = hash(roi[0])
             if active == 'b':
                 mask = self.masks[has_roi]
@@ -216,6 +239,7 @@ class PolyROI:
                 mask_section = mask[y-radius:y+radius, x-radius:x+radius]
                 frame_section = frame[y-radius:y+radius, x-radius:x+radius]
                 frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+
             elif active == 'l':
                 mask = self.masks[has_roi]
                 self.boxes[has_roi] = cconv(
@@ -227,11 +251,21 @@ class PolyROI:
                 frame_section = frame[y-radius:y+radius, x-radius:x+radius]
                 frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
 
+            elif active == 'g':
+                mask = self.masks[has_roi]
+                self.boxes[has_roi] = cv.GaussianBlur(self.boxes[has_roi], (15,15), 10)
+                x, y = roi[0]
+                radii = roi[1]
+                radius = max(radii)
+                mask_section = mask[y-radius:y+radius, x-radius:x+radius]
+                frame_section = frame[y-radius:y+radius, x-radius:x+radius]
+                frame[y-radius:y+radius, x-radius:x+radius] = np.where(mask_section == 255,self.boxes[has_roi], frame_section )
+
 
     
     def clean(self):
         """Method to clean the ROI"""
-        self.rois = []
+        self.rois.clear()
         self.masks.clear()
         self.boxes.clear()
 
@@ -239,13 +273,14 @@ cv.namedWindow("input")
 cv.moveWindow('input', 0, 0)
 
 region = ROI("input")
-circular_region = CircularROI("input")
 poly_region = PolyROI("input")
+circular_region = CircularROI("input")
+
 active = ''
 mode = 'circular'   # 'quad' or 'circular'
 points = []     # list of points to apply masks in circular regions
 
-AVAILABLE_KEYS = [ord('b'), ord('l')]
+AVAILABLE_KEYS = [ord('b'), ord('l'), ord('g')]
 
 for key, frame in autoStream():
     h, w = frame.shape[:2]
@@ -269,6 +304,8 @@ for key, frame in autoStream():
             poly_region.setAsCallback()
     elif key == ord('c'):
         active = ''
+    elif key == ord('q'):
+        break
     elif key in AVAILABLE_KEYS:
             active = chr(key)
 
