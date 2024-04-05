@@ -29,6 +29,41 @@ def polynomialModel(center: pt, radius: List[int], fractions: int = 0) -> List[p
 
     return points
 
+def segments2polynomial(segments: List[pt], percentage:float=0.7, numberPoints=300) -> List[pt]:
+    """Create a polynomial model from a set of segments using fft"""
+    complexPoints = [complex(p.x, p.y) for p in segments]
+    fft = np.fft.fft(complexPoints)
+    x = int(len(fft) * percentage)
+    #fft[x:-x] = 0
+
+    # print(f"Numero de recuencias: {len(fft)}")
+    # print(f"Frecuencias: {fft}")
+
+    # magnitudes of the frequencies
+    cis = np.abs(fft)
+    # phases of the frequencies
+    phis = np.angle(fft)
+
+    times = np.linspace(0, 2*np.pi, numberPoints)
+    # idft
+    newComplexPoints = []
+    for t in times:
+        newPoint = sum([
+            c * np.exp(1j * (i * t + phi)) 
+            for i, (c, phi) in enumerate(zip(cis, phis))
+            ])
+        newComplexPoints.append(newPoint)
+    newPoints = [pt(int(p.real), int(p.imag)) for p in newComplexPoints]
+
+    import matplotlib.pyplot as plt
+    plt.plot([p.x for p in newPoints], [p.y for p in newPoints])
+    # show the initial points
+    plt.scatter([p.x for p in segments], [p.y for p in segments], color='red')
+    plt.show()
+
+    return newPoints
+        
+
 def lPolynomial2nlPolynomial(points: List[pt]) -> List[pt]:
     """Convert a linear polynomial to a non linear polynomial using 
     2nd degree bezier curves"""
@@ -91,17 +126,20 @@ def maskFromPolygons(polygon: List[pt], size: tuple):
 
 if __name__ == "__main__":
     box = np.zeros((400,400,3), dtype=np.uint8)
+    pointsBox = np.zeros((400,400,3), dtype=np.uint8)
 
     points: List[pt]  = polynomialModel(pt(200,200), [200,100,50,110,150,130,140], 15)
-    nlPoints: List[pt] = lPolynomial2nlPolynomial(points)
+    #nlPoints: List[pt] = lPolynomial2nlPolynomial(points)
+    nlPoints: List[pt] = segments2polynomial(points)
     mask = maskFromPolygons([np.array(nlPoints, np.int32)], (400,400))
-    #cv.polylines(box, [np.array(points, np.int32)], isClosed=True, color=255, thickness=1)
-    cv.polylines(box, [np.array(nlPoints, np.int32)], isClosed=False, color=(255,255,255), thickness=1)
+    cv.polylines(pointsBox, [np.array(points, np.int32)], isClosed=True, color=255, thickness=1)
+    cv.polylines(box, [np.array(nlPoints, np.int32)], isClosed=True, color=(255,255,255), thickness=1)
 
     # Draw the points in the box
     # for i,p in enumerate(nlPoints):
     #     cv.circle(box, (p.x, p.y), 2, (0,255,0), -1)
     #     cv.putText(box, str(i), (p.x, p.y), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+    cv.imshow("points", pointsBox)
     cv.imshow("mask", mask)
     cv.imshow("box", box)
     # waits for user to press any key 
